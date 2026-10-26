@@ -61,7 +61,7 @@ def processar_foto_aluno(file_uploader_obj):
 
 # --- ETAPA 1: EXIBIÇÃO DAS RÉPLICAS GERADAS NO CÓDIGO ---
 st.header("1. Amostras para Análise Visual")
-st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}` (Fórmula: 100 + últimos 2 dígitos da matrícula)")
+st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}` (Fórmula: 120 + últimos 2 dígitos da matrícula)")
 
 col_disp1, col_disp2, col_disp3 = st.columns(3)
 
