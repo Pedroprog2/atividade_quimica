@@ -29,6 +29,37 @@ ref_kno4 = 100 + ultimos_digitos
 st.info(f"📍 **Seu valor de referência para a análise de $KMnO_4$ é:** `{ref_kno4}`")
 st.caption("Fórmula: 100 + (últimos 2 dígitos da matrícula)")
 
+
+# --- EXIBIÇÃO DAS 3 RÉPLICAS DE IMAGEM NO STREAMLIT ---
+st.header("📸 Réplicas para Medição")
+st.write("Abaixo estão as 3 amostras do lote. Realize o procedimento descrito na Questão 2.")
+
+col_a, col_b, col_c = st.columns(3)
+
+# Exemplo: criando 3 imagens sintéticas com pequenas variações no Canal R (ou carregando imagens reais do seu servidor)
+# Substitua por: img_a = Image.open('amostra_A.jpg'), etc.
+base_color = 120 + (matricula % 15) # Dá uma variação sutil baseada na matrícula do aluno
+
+# Gerando matrizes com pequenas variações para o canal R
+arr_a = np.full((150, 150, 3), [base_color, 40, 80], dtype=np.uint8)
+arr_b = np.full((150, 150, 3), [base_color - 4, 42, 78], dtype=np.uint8)
+arr_c = np.full((150, 150, 3), [base_color + 3, 38, 82], dtype=np.uint8)
+
+img_a, img_b, img_c = Image.fromarray(arr_a), Image.fromarray(arr_b), Image.fromarray(arr_c)
+
+with col_a:
+    st.image(img_a, caption="Réplica A", use_column_width=True)
+with col_b:
+    st.image(img_b, caption="Réplica B", use_column_width=True)
+with col_c:
+    st.image(img_c, caption="Réplica C", use_column_width=True)
+
+st.divider()
+
+# --- UPLOAD DA FOTO COMPROBATÓRIA DO ALUNO ---
+st.subheader("Envio da Comprovação (Câmera do Celular)")
+uploaded_file = st.file_uploader("Envie a foto tirada pelo celular mostrando a tela + papel manuscrito", type=["jpg", "jpeg", "png"])
+
 # --- UPLOAD DA FOTO E VERIFICAÇÃO DE METADADOS ---
 st.header("2. Coleta da Imagem da Amostra (Canal Vermelho)")
 st.write("Envie a foto da sua amostra com um papel manuscrito ao lado contendo seu nome e a data de hoje.")
