@@ -34,7 +34,7 @@ if not nome_aluno or not matricula_input or not matricula_input.isdigit():
 
 matricula = int(matricula_input)
 ultimos_digitos = matricula % 100
-ref_kno4 = 100 + ultimos_digitos
+ref_kno4 = 120 + ultimos_digitos
 
 # --- FUNÇÃO AUXILIAR: PROCESSAMENTO DA FOTO DO ALUNO E EXIF ---
 def processar_foto_aluno(file_uploader_obj):
