@@ -1,27 +1,27 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 from PIL import Image, ImageStat
 import piexif
 from datetime import datetime
 import os
 import io
 import zipfile
-from scipy import stats
-import numpy as np
+
+# Suporte nativo a imagens de iPhone (.HEIC)
 from pillow_heif import register_heif_opener
+register_heif_opener()
 
-register_heif_opener() # Permite que a PIL abra arquivos .HEIC nativamente
-
-# Dependências para gerar o PDF
+# Dependências do ReportLab para geração do PDF
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
 st.set_page_config(page_title="Laboratório Virtual - Teste t e Colorimetria", layout="wide")
 
 st.title("🔬 Laboratório de Colorimetria e Teste t de Student")
-st.write("Realize as medições das réplicas, envie os registros fotográficos e insira seus cálculos estatísticos.")
+st.write("Analise as réplicas na tela, capture cada foto com o celular, realize os cálculos no papel e envie os registros.")
 
 # --- 1. IDENTIFICAÇÃO DO ESTUDANTE ---
 st.sidebar.header("Identificação do Aluno")
@@ -29,20 +29,20 @@ nome_aluno = st.sidebar.text_input("Nome Completo:")
 matricula_input = st.sidebar.text_input("Matrícula (apenas números):")
 
 if not nome_aluno or not matricula_input or not matricula_input.isdigit():
-    st.warning("⚠️ Preencha seu nome completo e matrícula na barra lateral para liberar as etapas do exercício.")
+    st.warning("⚠️ Preencha seu nome completo e apenas números da matrícula na barra lateral para iniciar a atividade.")
     st.stop()
 
 matricula = int(matricula_input)
 ultimos_digitos = matricula % 100
-ref_kno4 = 130 + ultimos_digitos
+ref_kno4 = 100 + ultimos_digitos
 
-# --- FUNÇÃO AUXILIAR: PROCESSAMENTO DA IMAGEM E EXIF ---
-def processar_amostra(file_uploader_obj):
+# --- FUNÇÃO AUXILIAR: PROCESSAMENTO DA FOTO DO ALUNO E EXIF ---
+def processar_foto_aluno(file_uploader_obj):
     if file_uploader_obj is not None:
         img = Image.open(file_uploader_obj)
         
-        # Leitura de EXIF
-        data_exif = "EXIF não encontrado"
+        # Leitura dos Metadados EXIF
+        data_exif = "Sem registro EXIF"
         try:
             exif_dict = piexif.load(file_uploader_obj.getvalue())
             if "Exif" in exif_dict and piexif.ExifIFD.DateTimeOriginal in exif_dict["Exif"]:
@@ -51,7 +51,7 @@ def processar_amostra(file_uploader_obj):
         except Exception:
             pass
             
-        # Extração do Canal Vermelho Médio (R)
+        # Extração da Média do Canal Vermelho (R) da foto enviada
         rgb_img = img.convert('RGB')
         stat = ImageStat.Stat(rgb_img)
         r_medio = round(stat.mean[0], 2)
@@ -59,58 +59,83 @@ def processar_amostra(file_uploader_obj):
         return img, r_medio, data_exif
     return None, None, None
 
-# --- ETAPA 1: ENVIO DAS TRÊS RÉPLICAS ---
-st.header("1. Análise Visual das Réplicas")
-st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}`")
+# --- ETAPA 1: EXIBIÇÃO DAS RÉPLICAS GERADAS NO CÓDIGO ---
+st.header("1. Amostras para Análise Visual")
+st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}` (Fórmula: 100 + últimos 2 dígitos da matrícula)")
 
-col1, col2, col3 = st.columns(3)
+col_disp1, col_disp2, col_disp3 = st.columns(3)
 
-# Cor base com variação pela matrícula
-base_r = 130 + (matricula % 20) 
+# Gerando matrizes sintéticas únicas por matrícula (sem exibir os valores brutos de R)
+base_r = 125 + (matricula % 25)
+arr_a = np.full((180, 180, 3), [base_r, 40, 85], dtype=np.uint8)
+arr_b = np.full((180, 180, 3), [base_r - 6, 42, 80], dtype=np.uint8)
+arr_c = np.full((180, 180, 3), [base_r + 5, 38, 88], dtype=np.uint8)
 
-# Criando imagens sintéticas 200x200 px no formato RGB
-arr_a = np.full((200, 200, 3), [base_r, 45, 80], dtype=np.uint8)
-arr_b = np.full((200, 200, 3), [base_r - 5, 48, 78], dtype=np.uint8)
-arr_c = np.full((200, 200, 3), [base_r + 4, 42, 82], dtype=np.uint8)
-
-img_a, img_b, img_c = Image.fromarray(arr_a), Image.fromarray(arr_b), Image.fromarray(arr_c)
-
-with col1:
+with col_disp1:
     st.subheader("Réplica A")
-    st.image(img_a, use_column_width=True)
-    r_a = float(base_r)
-    
+    st.image(Image.fromarray(arr_a), use_column_width=True)
 
-with col2:
+with col_disp2:
     st.subheader("Réplica B")
-    st.image(img_b, use_column_width=True)
-    r_b = float(base_r - 5)
-    
+    st.image(Image.fromarray(arr_b), use_column_width=True)
 
-with col3:
+with col_disp3:
     st.subheader("Réplica C")
-    st.image(img_c, use_column_width=True)
-    r_c = float(base_r + 4)
-    
+    st.image(Image.fromarray(arr_c), use_column_width=True)
 
-# Só avança se as 3 fotos forem enviadas
+st.divider()
+
+# --- ETAPA 2: UPLOAD DAS FOTOS TIRADAS PELO CELULAR ---
+st.header("2. Validação Fotográfica e Medição de R")
+st.write("Use a câmera do celular para fotografar cada réplica exibida na tela do computador e envie nos campos abaixo:")
+
+col_up1, col_up2, col_up3 = st.columns(3)
+
+with col_up1:
+    st.subheader("Upload Réplica A")
+    file_a = st.file_uploader("Foto da Réplica A (Celular)", type=["jpg", "jpeg", "png", "heic"], key="up_a")
+    img_a, r_a, exif_a = processar_foto_aluno(file_a)
+    if img_a:
+        st.image(img_a, use_column_width=True)
+        st.success(f"**R Médio Lido:** {r_a}")
+        st.caption(f"Data Foto: {exif_a}")
+
+with col_up2:
+    st.subheader("Upload Réplica B")
+    file_b = st.file_uploader("Foto da Réplica B (Celular)", type=["jpg", "jpeg", "png", "heic"], key="up_b")
+    img_b, r_b, exif_b = processar_foto_aluno(file_b)
+    if img_b:
+        st.image(img_b, use_column_width=True)
+        st.success(f"**R Médio Lido:** {r_b}")
+        st.caption(f"Data Foto: {exif_b}")
+
+with col_up3:
+    st.subheader("Upload Réplica C")
+    file_c = st.file_uploader("Foto da Réplica C (Celular)", type=["jpg", "jpeg", "png", "heic"], key="up_c")
+    img_c, r_c, exif_c = processar_foto_aluno(file_c)
+    if img_c:
+        st.image(img_c, use_column_width=True)
+        st.success(f"**R Médio Lido:** {r_c}")
+        st.caption(f"Data Foto: {exif_c}")
+
+# Libera as etapas seguintes apenas se as 3 fotos das réplicas forem enviadas
 if r_a is not None and r_b is not None and r_c is not None:
     st.divider()
     
-    # --- ETAPA 2: MANUSCRITO DOS CÁLCULOS ---
-    st.header("2. Upload da Folha de Cálculos Manuscrita")
-    st.write("Realize os cálculos da **Média**, **Desvio Padrão**, **t calculado** e **t observado/crítico** no papel. Tire uma foto visível e envie abaixo:")
-    file_manuscrito = st.file_uploader("Foto da folha de cálculos manuscritos", type=["jpg", "jpeg", "png"], key="manuscrito")
+    # --- ETAPA 3: UPLOAD DO MANUSCRITO DE CÁLCULOS ---
+    st.header("3. Resolução e Cálculos Manuscritos")
+    st.write(f"Utilize as médias obtidas (**$R_A = {r_a}$**, **$R_B = {r_b}$**, **$R_C = {r_c}$**) e a referência **$\mu_0 = {ref_kno4}$** para calcular em uma folha de papel:")
+    st.markdown("- Média ($\bar{x}$) e Desvio Padrão ($s$)\n- Valor de $t$ calculado ($t_{calc}$) e $t$ observado/crítico ($t_{crit}$)\n- Conclusão da hipótese estatística")
+    
+    file_manuscrito = st.file_uploader("Envie a foto da folha com os cálculos manuscritos", type=["jpg", "jpeg", "png", "heic"], key="up_manuscrito")
     
     if file_manuscrito:
         img_manuscrito = Image.open(file_manuscrito)
-        st.image(img_manuscrito, caption="Folha de Cálculos Enviada", width=400)
-        
+        st.image(img_manuscrito, caption="Manuscrito Registrado", width=350)
         st.divider()
         
-        # --- ETAPA 3: INSERÇÃO DOS RESULTADOS NO SISTEMA ---
-        st.header("3. Inserção dos Resultados Estatísticos")
-        st.write("Transcreva abaixo os valores obtidos no seu manuscrito:")
+        # --- ETAPA 4: INSERÇÃO DOS RESULTADOS E CONCLUSÃO ---
+        st.header("4. Transcrição dos Resultados")
         
         c1, c2, c3, c4 = st.columns(4)
         with c1:
@@ -120,95 +145,88 @@ if r_a is not None and r_b is not None and r_c is not None:
         with c3:
             t_calc_aluno = st.number_input("$t$ calculado ($t_{calc}$):", step=0.001)
         with c4:
-            t_obs_aluno = st.number_input("$t$ observado/tabelado ($t_{crit}$):", step=0.001)
+            t_obs_aluno = st.number_input("$t$ observado ($t_{crit}$):", step=0.001)
 
         conclusao_aluno = st.radio(
-            "Conclusão do Teste t (nível de significância de 5%):",
+            "Resultado da análise estatística (nível de significância $\alpha = 0,05$):",
             ["Selecione...", "Existe diferença estatística significativa", "Não existe diferença estatística significativa"]
         )
 
-        # --- FUNÇÃO PARA GERAR O PDF CONSOLIDADO DO ALUNO ---
+        # --- GERADOR DE RELATÓRIO PDF ---
         def gerar_pdf_relatorio(nome, mat, r_a, r_b, r_c, media, desvio, t_calc, t_obs, conc, file_script):
             buffer = io.BytesIO()
             doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
             elements = []
             styles = getSampleStyleSheet()
 
-            # Título
-            elements.append(Paragraph(f"<b>Relatório de Atividade Prática - Teste t</b>", styles['Title']))
-            elements.append(Spacer(1, 12))
+            elements.append(Paragraph("<b>Relatório de Atividade Prática - Teste t de Student</b>", styles['Title']))
+            elements.append(Spacer(1, 10))
             
-            # Cabeçalho
-            info_text = f"<b>Aluno:</b> {nome}<br/><b>Matrícula:</b> {mat}<br/><b>Data do Envio:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
-            elements.append(Paragraph(info_text, styles['Normal']))
+            info = f"<b>Aluno:</b> {nome}<br/><b>Matrícula:</b> {mat}<br/><b>Data de Envio:</b> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}"
+            elements.append(Paragraph(info, styles['Normal']))
             elements.append(Spacer(1, 12))
 
-            # Tabela de Dados Extraídos pelo Sistema
-            dados_tabela = [
-                ["Réplica", "Valor de R Médio", "Data EXIF da Foto"],
+            # Tabela com as leituras das fotos
+            data_tab = [
+                ["Amostra", "R Médio Extraído", "Metadados EXIF"],
                 ["Réplica A", str(r_a), str(exif_a)],
                 ["Réplica B", str(r_b), str(exif_b)],
-                ["Réplica C", str(r_c), str(exif_c)],
+                ["Réplica C", str(r_c), str(exif_c)]
             ]
-            t = Table(dados_tabela, colWidths=[100, 150, 200])
+            t = Table(data_tab, colWidths=[100, 130, 220])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.lightgrey),
                 ('ALIGN', (0,0), (-1,-1), 'CENTER'),
                 ('GRID', (0,0), (-1,-1), 1, colors.black)
             ]))
             elements.append(t)
-            elements.append(Spacer(1, 15))
+            elements.append(Spacer(1, 12))
 
-            # Resultados do Aluno
-            res_text = f"""
-            <b>Valor de Referência (&mu;<sub>0</sub>):</b> {ref_kno4}<br/>
-            <b>Média Calculada (&bar;x):</b> {media}<br/>
-            <b>Desvio Padrão (s):</b> {desvio}<br/>
+            resumo = f"""
+            <b>Referência (&mu;<sub>0</sub>):</b> {ref_kno4}<br/>
+            <b>Média (&bar;x):</b> {media} | <b>Desvio Padrão (s):</b> {desvio}<br/>
             <b>t Calculado:</b> {t_calc} | <b>t Observado:</b> {t_obs}<br/>
-            <b>Conclusão:</b> {conc}
+            <b>Conclusão do Aluno:</b> {conc}
             """
-            elements.append(Paragraph(res_text, styles['Normal']))
-            elements.append(Spacer(1, 15))
+            elements.append(Paragraph(resumo, styles['Normal']))
+            elements.append(Spacer(1, 12))
 
-            # Adicionar imagem do manuscrito
+            # Ajuste e inserção da foto do manuscrito no PDF
             elements.append(Paragraph("<b>Comprovação dos Cálculos Manuscritos:</b>", styles['Heading2']))
             elements.append(Spacer(1, 5))
             
-            # Redimensiona imagem mantendo proporção no PDF
-            img_m = Image.open(file_script)
+            img_m = Image.open(file_script).convert("RGB")
             img_m.thumbnail((400, 400))
-            img_m_path = f"temp_{mat}.jpg"
-            img_m.save(img_m_path)
+            temp_path = f"temp_{mat}.jpg"
+            img_m.save(temp_path)
             
-            elements.append(RLImage(img_m_path, width=350, height=350))
+            elements.append(RLImage(temp_path, width=320, height=320))
 
             doc.build(elements)
-            
-            if os.path.exists(img_m_path):
-                os.remove(img_m_path)
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
                 
             buffer.seek(0)
             return buffer.getvalue()
 
-        # --- BOTÃO DE SUBMISSÃO FINAL ---
+        # --- SUBMISSÃO FINAL ---
         if st.button("🚀 Enviar Atividade Completa"):
             if conclusao_aluno == "Selecione...":
-                st.error("Por favor, selecione a conclusão do seu teste estatístico.")
+                st.error("Por favor, selecione a conclusão da sua análise antes de enviar.")
             else:
-                # 1. Gerar arquivo PDF do aluno
+                # 1. Gera o PDF único
                 pdf_bytes = gerar_pdf_relatorio(
                     nome_aluno, matricula, r_a, r_b, r_c, 
                     media_aluno, desvio_aluno, t_calc_aluno, t_obs_aluno, 
                     conclusao_aluno, file_manuscrito
                 )
                 
-                # Salvar PDF na pasta relatorios/
                 os.makedirs("relatorios", exist_ok=True)
-                pdf_filename = f"relatorios/{nome_aluno.replace(' ', '_')}_{matricula}.pdf"
-                with open(pdf_filename, "wb") as f:
+                pdf_path = f"relatorios/{nome_aluno.replace(' ', '_')}_{matricula}.pdf"
+                with open(pdf_path, "wb") as f:
                     f.write(pdf_bytes)
 
-                # 2. Salvar Registro na Planilha CSV
+                # 2. Grava na planilha CSV
                 registro = {
                     "Nome": nome_aluno.strip().title(),
                     "Matricula": matricula,
@@ -220,7 +238,7 @@ if r_a is not None and r_b is not None and r_c is not None:
                     "T_Calc_Aluno": t_calc_aluno,
                     "T_Obs_Aluno": t_obs_aluno,
                     "Conclusao_Aluno": conclusao_aluno,
-                    "Arquivo_PDF": pdf_filename
+                    "Caminho_PDF": pdf_path
                 }
 
                 csv_file = "respostas_alunos.csv"
@@ -230,40 +248,35 @@ if r_a is not None and r_b is not None and r_c is not None:
                 else:
                     df = pd.DataFrame([registro])
 
-                # Ordena e salva sempre alfabeticamente
                 df = df.sort_values(by="Nome", ascending=True)
                 df.to_csv(csv_file, index=False)
 
-                st.success("🎉 Atividade enviada com sucesso! O relatório PDF único foi gerado e registrado.")
+                st.success("🎉 Atividade enviada com sucesso! Seu relatório único em PDF e seus dados foram salvos.")
 
-# --- ÁREA RESTRITA DO PROFESSOR (PAINEL DE CONTROLE) ---
+# --- PAINEL DE CONTROLE DO PROFESSOR ---
 st.sidebar.write("---")
 if st.sidebar.checkbox("🔒 Acesso do Professor"):
-    senha = st.sidebar.text_input("Senha:", type="password")
-    if senha == "prof123": # Altere para sua senha
-        st.header("📊 Painel do Professor - Downloads e Registros")
+    senha = st.sidebar.text_input("Senha de Acesso:", type="password")
+    if senha == "prof123":
+        st.header("📊 Painel do Professor")
         
         if os.path.exists("respostas_alunos.csv"):
             df_prof = pd.read_csv("respostas_alunos.csv")
-            
-            # Exibe Tabela em Ordem Alfabética
-            st.subheader("Lista de Alunos Respondentes (Ordem Alfabética)")
+            st.subheader("Lista de Respostas (Ordem Alfabética)")
             st.dataframe(df_prof)
             
-            c_down1, c_down2 = st.columns(2)
+            col_d1, col_d2 = st.columns(2)
             
-            # Botão 1: Baixar Planilha CSV
-            with c_down1:
+            with col_d1:
                 csv_data = df_prof.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="📥 Baixar Planilha CSV (Ordenada)",
                     data=csv_data,
-                    file_name="lista_alunos_respostas.csv",
+                    file_name="respostas_alunos_ordenadas.csv",
                     mime="text/csv"
                 )
             
-            # Botão 2: Baixar Todos os PDFs em um arquivo ZIP
-            with c_down2:
+            with col_d2:
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w") as zf:
                     for root, dirs, files in os.walk("relatorios"):
@@ -272,12 +285,12 @@ if st.sidebar.checkbox("🔒 Acesso do Professor"):
                 
                 zip_buffer.seek(0)
                 st.download_button(
-                    label="📦 Baixar Todos os PDFs em ZIP",
+                    label="📦 Baixar Todos os Relatórios PDF (ZIP)",
                     data=zip_buffer,
-                    file_name="relatorios_alunos_pdf.zip",
+                    file_name="relatorios_alunos.zip",
                     mime="application/zip"
                 )
         else:
-            st.info("Nenhuma submissão registrada até o momento.")
+            st.info("Nenhuma submissão realizada ainda.")
     elif senha:
         st.sidebar.error("Senha incorreta.")
