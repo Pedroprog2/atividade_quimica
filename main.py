@@ -7,6 +7,7 @@ import os
 import io
 import zipfile
 from scipy import stats
+import numpy as np
 
 # Dependências para gerar o PDF
 from reportlab.lib.pagesizes import letter
