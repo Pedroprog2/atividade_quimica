@@ -3,4 +3,4 @@ pandas
 pillow
 piexif
 scipy
-numpy
+reportlab
