@@ -3,3 +3,4 @@ pandas
 pillow
 piexif
 scipy
+PIL
