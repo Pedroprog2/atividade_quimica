@@ -56,37 +56,38 @@ def processar_amostra(file_uploader_obj):
     return None, None, None
 
 # --- ETAPA 1: ENVIO DAS TRÊS RÉPLICAS ---
-st.header("1. Captura e Extração do Canal Vermelho (R)")
-st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}` (Fórmula: 100 + últimos 2 dígitos da matrícula)")
+st.header("1. Análise Visual das Réplicas")
+st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}`")
 
 col1, col2, col3 = st.columns(3)
 
+# Cor base com variação pela matrícula
+base_r = 130 + (matricula % 20) 
+
+# Criando imagens sintéticas 200x200 px no formato RGB
+arr_a = np.full((200, 200, 3), [base_r, 45, 80], dtype=np.uint8)
+arr_b = np.full((200, 200, 3), [base_r - 5, 48, 78], dtype=np.uint8)
+arr_c = np.full((200, 200, 3), [base_r + 4, 42, 82], dtype=np.uint8)
+
+img_a, img_b, img_c = Image.fromarray(arr_a), Image.fromarray(arr_b), Image.fromarray(arr_c)
+
 with col1:
     st.subheader("Réplica A")
-    file_a = st.file_uploader("Foto da Réplica A", type=["jpg", "jpeg", "png"], key="replica_a")
-    img_a, r_a, exif_a = processar_amostra(file_a)
-    if img_a:
-        st.image(img_a, use_column_width=True)
-        st.success(f"**R Médio:** {r_a}")
-        st.caption(f"Data Foto: {exif_a}")
+    st.image(img_a, use_column_width=True)
+    r_a = float(base_r)
+    st.success(f"**R Médio:** {r_a}")
 
 with col2:
     st.subheader("Réplica B")
-    file_b = st.file_uploader("Foto da Réplica B", type=["jpg", "jpeg", "png"], key="replica_b")
-    img_b, r_b, exif_b = processar_amostra(file_b)
-    if img_b:
-        st.image(img_b, use_column_width=True)
-        st.success(f"**R Médio:** {r_b}")
-        st.caption(f"Data Foto: {exif_b}")
+    st.image(img_b, use_column_width=True)
+    r_b = float(base_r - 5)
+    st.success(f"**R Médio:** {r_b}")
 
 with col3:
     st.subheader("Réplica C")
-    file_c = st.file_uploader("Foto da Réplica C", type=["jpg", "jpeg", "png"], key="replica_c")
-    img_c, r_c, exif_c = processar_amostra(file_c)
-    if img_c:
-        st.image(img_c, use_column_width=True)
-        st.success(f"**R Médio:** {r_c}")
-        st.caption(f"Data Foto: {exif_c}")
+    st.image(img_c, use_column_width=True)
+    r_c = float(base_r + 4)
+    st.success(f"**R Médio:** {r_c}")
 
 # Só avança se as 3 fotos forem enviadas
 if r_a is not None and r_b is not None and r_c is not None:
