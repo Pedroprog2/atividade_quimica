@@ -8,6 +8,9 @@ import io
 import zipfile
 from scipy import stats
 import numpy as np
+from pillow_heif import register_heif_opener
+
+register_heif_opener() # Permite que a PIL abra arquivos .HEIC nativamente
 
 # Dependências para gerar o PDF
 from reportlab.lib.pagesizes import letter
