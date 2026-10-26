@@ -5,3 +5,4 @@ piexif
 scipy
 reportlab
 numpy
+pillow-heif
