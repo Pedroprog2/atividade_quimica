@@ -3,5 +3,4 @@ pandas
 pillow
 piexif
 scipy
-PIL
 numpy
