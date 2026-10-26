@@ -7,6 +7,7 @@ from datetime import datetime
 import os
 import io
 import zipfile
+import hashlib  # Biblioteca nativa para verificação de duplicidade
 
 # Suporte nativo a imagens de iPhone (.HEIC)
 from pillow_heif import register_heif_opener
@@ -34,38 +35,42 @@ if not nome_aluno or not matricula_input or not matricula_input.isdigit():
 
 matricula = int(matricula_input)
 ultimos_digitos = matricula % 100
-ref_kno4 = 120 + ultimos_digitos
+ref_kno4 = 100 + ultimos_digitos
 
-# --- FUNÇÃO AUXILIAR: PROCESSAMENTO DA FOTO DO ALUNO E EXIF ---
+# --- FUNÇÃO AUXILIAR: PROCESSAMENTO DA FOTO, EXIF E HASH MD5 ---
 def processar_foto_aluno(file_uploader_obj):
     if file_uploader_obj is not None:
+        bytes_data = file_uploader_obj.getvalue()
+        
+        # Gerar a assinatura digital única (Hash MD5) do arquivo de foto
+        hash_arquivo = hashlib.md5(bytes_data).hexdigest()
+        
         img = Image.open(file_uploader_obj)
         
         # Leitura dos Metadados EXIF
         data_exif = "Sem registro EXIF"
         try:
-            exif_dict = piexif.load(file_uploader_obj.getvalue())
+            exif_dict = piexif.load(bytes_data)
             if "Exif" in exif_dict and piexif.ExifIFD.DateTimeOriginal in exif_dict["Exif"]:
                 raw_date = exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal].decode('utf-8')
                 data_exif = datetime.strptime(raw_date, '%Y:%m:%d %H:%M:%S').strftime('%d/%m/%Y %H:%M:%S')
         except Exception:
             pass
             
-        # Extração da Média do Canal Vermelho (R) da foto enviada
+        # Extração da Média do Canal Vermelho (R)
         rgb_img = img.convert('RGB')
         stat = ImageStat.Stat(rgb_img)
         r_medio = round(stat.mean[0], 2)
         
-        return img, r_medio, data_exif
-    return None, None, None
+        return img, r_medio, data_exif, hash_arquivo
+    return None, None, None, None
 
 # --- ETAPA 1: EXIBIÇÃO DAS RÉPLICAS GERADAS NO CÓDIGO ---
 st.header("1. Amostras para Análise Visual")
-st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}` (Fórmula: 120 + últimos 2 dígitos da matrícula)")
+st.info(f"📍 **Seu valor de referência individual ($\mu_0$):** `{ref_kno4}` (Fórmula: 100 + últimos 2 dígitos da matrícula)")
 
 col_disp1, col_disp2, col_disp3 = st.columns(3)
 
-# Gerando matrizes sintéticas únicas por matrícula (sem exibir os valores brutos de R)
 base_r = 125 + (matricula % 25)
 arr_a = np.full((180, 180, 3), [base_r, 40, 85], dtype=np.uint8)
 arr_b = np.full((180, 180, 3), [base_r - 6, 42, 80], dtype=np.uint8)
@@ -85,40 +90,55 @@ with col_disp3:
 
 st.divider()
 
-# --- ETAPA 2: UPLOAD DAS FOTOS TIRADAS PELO CELULAR ---
+# --- ETAPA 2: UPLOAD DAS FOTOS E VERIFICAÇÃO DE DUPLICIDADE ---
 st.header("2. Validação Fotográfica e Medição de R")
-st.write("Use a câmera do celular para fotografar cada réplica exibida na tela do computador e envie nos campos abaixo:")
+st.write("Use a câmera do celular para fotografar **cada réplica individualmente** na tela do computador e envie nos campos abaixo:")
 
 col_up1, col_up2, col_up3 = st.columns(3)
 
 with col_up1:
     st.subheader("Upload Réplica A")
-    file_a = st.file_uploader("Foto da Réplica A (Celular)", type=["jpg", "jpeg", "png", "heic"], key="up_a")
-    img_a, r_a, exif_a = processar_foto_aluno(file_a)
-    if img_a:
+    file_a = st.file_uploader("Foto da Réplica A", type=["jpg", "jpeg", "png", "heic"], key="up_a")
+    img_a, r_a, exif_a, hash_a = processar_foto_aluno(file_a)
+
+with col_up2:
+    st.subheader("Upload Réplica B")
+    file_b = st.file_uploader("Foto da Réplica B", type=["jpg", "jpeg", "png", "heic"], key="up_b")
+    img_b, r_b, exif_b, hash_b = processar_foto_aluno(file_b)
+
+with col_up3:
+    st.subheader("Upload Réplica C")
+    file_c = st.file_uploader("Foto da Réplica C", type=["jpg", "jpeg", "png", "heic"], key="up_c")
+    img_c, r_c, exif_c, hash_c = processar_foto_aluno(file_c)
+
+# --- VALIDAÇÃO CONTRA REUTILIZAÇÃO DE IMAGENS ---
+hashes_enviados = [h for h in [hash_a, hash_b, hash_c] if h is not None]
+
+# Se houver imagens repetidas (hashes idênticos)
+if len(hashes_enviados) != len(set(hashes_enviados)):
+    st.error("🚫 **Fotos duplicadas detectadas!** Você enviou a mesma imagem para mais de uma réplica. Cada réplica deve ter uma foto individual tirada no momento da medição.")
+    st.stop()
+
+# Exibe confirmações individuais se não forem duplicadas
+if img_a:
+    with col_up1:
         st.image(img_a, use_column_width=True)
         st.success(f"**R Médio Lido:** {r_a}")
         st.caption(f"Data Foto: {exif_a}")
 
-with col_up2:
-    st.subheader("Upload Réplica B")
-    file_b = st.file_uploader("Foto da Réplica B (Celular)", type=["jpg", "jpeg", "png", "heic"], key="up_b")
-    img_b, r_b, exif_b = processar_foto_aluno(file_b)
-    if img_b:
+if img_b:
+    with col_up2:
         st.image(img_b, use_column_width=True)
         st.success(f"**R Médio Lido:** {r_b}")
         st.caption(f"Data Foto: {exif_b}")
 
-with col_up3:
-    st.subheader("Upload Réplica C")
-    file_c = st.file_uploader("Foto da Réplica C (Celular)", type=["jpg", "jpeg", "png", "heic"], key="up_c")
-    img_c, r_c, exif_c = processar_foto_aluno(file_c)
-    if img_c:
+if img_c:
+    with col_up3:
         st.image(img_c, use_column_width=True)
         st.success(f"**R Médio Lido:** {r_c}")
         st.caption(f"Data Foto: {exif_c}")
 
-# Libera as etapas seguintes apenas se as 3 fotos das réplicas forem enviadas
+# Libera as etapas seguintes apenas se as 3 fotos distintas forem enviadas
 if r_a is not None and r_b is not None and r_c is not None:
     st.divider()
     
@@ -128,10 +148,14 @@ if r_a is not None and r_b is not None and r_c is not None:
     st.markdown("- Média ($\bar{x}$) e Desvio Padrão ($s$)\n- Valor de $t$ calculado ($t_{calc}$) e $t$ observado/crítico ($t_{crit}$)\n- Conclusão da hipótese estatística")
     
     file_manuscrito = st.file_uploader("Envie a foto da folha com os cálculos manuscritos", type=["jpg", "jpeg", "png", "heic"], key="up_manuscrito")
+    img_m_check, _, _, hash_m = processar_foto_aluno(file_manuscrito)
     
-    if file_manuscrito:
-        img_manuscrito = Image.open(file_manuscrito)
-        st.image(img_manuscrito, caption="Manuscrito Registrado", width=350)
+    if hash_m and hash_m in hashes_enviados:
+        st.error("🚫 A foto da folha de cálculos não pode ser a mesma foto enviada para as réplicas.")
+        st.stop()
+
+    if file_manuscrito and img_m_check:
+        st.image(img_m_check, caption="Manuscrito Registrado", width=350)
         st.divider()
         
         # --- ETAPA 4: INSERÇÃO DOS RESULTADOS E CONCLUSÃO ---
@@ -166,7 +190,6 @@ if r_a is not None and r_b is not None and r_c is not None:
             elements.append(Paragraph(info, styles['Normal']))
             elements.append(Spacer(1, 12))
 
-            # Tabela com as leituras das fotos
             data_tab = [
                 ["Amostra", "R Médio Extraído", "Metadados EXIF"],
                 ["Réplica A", str(r_a), str(exif_a)],
@@ -191,7 +214,6 @@ if r_a is not None and r_b is not None and r_c is not None:
             elements.append(Paragraph(resumo, styles['Normal']))
             elements.append(Spacer(1, 12))
 
-            # Ajuste e inserção da foto do manuscrito no PDF
             elements.append(Paragraph("<b>Comprovação dos Cálculos Manuscritos:</b>", styles['Heading2']))
             elements.append(Spacer(1, 5))
             
@@ -214,7 +236,6 @@ if r_a is not None and r_b is not None and r_c is not None:
             if conclusao_aluno == "Selecione...":
                 st.error("Por favor, selecione a conclusão da sua análise antes de enviar.")
             else:
-                # 1. Gera o PDF único
                 pdf_bytes = gerar_pdf_relatorio(
                     nome_aluno, matricula, r_a, r_b, r_c, 
                     media_aluno, desvio_aluno, t_calc_aluno, t_obs_aluno, 
@@ -226,7 +247,6 @@ if r_a is not None and r_b is not None and r_c is not None:
                 with open(pdf_path, "wb") as f:
                     f.write(pdf_bytes)
 
-                # 2. Grava na planilha CSV
                 registro = {
                     "Nome": nome_aluno.strip().title(),
                     "Matricula": matricula,
