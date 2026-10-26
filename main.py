@@ -4,6 +4,7 @@ from PIL import Image, ImageStat
 import piexif
 from datetime import datetime
 import os
+import numpy as np
 
 st.set_page_config(page_title="Laboratório Prático de Análise e Teste t", layout="wide")
 
