@@ -76,19 +76,19 @@ with col1:
     st.subheader("Réplica A")
     st.image(img_a, use_column_width=True)
     r_a = float(base_r)
-    st.success(f"**R Médio:** {r_a}")
+    
 
 with col2:
     st.subheader("Réplica B")
     st.image(img_b, use_column_width=True)
     r_b = float(base_r - 5)
-    st.success(f"**R Médio:** {r_b}")
+    
 
 with col3:
     st.subheader("Réplica C")
     st.image(img_c, use_column_width=True)
     r_c = float(base_r + 4)
-    st.success(f"**R Médio:** {r_c}")
+    
 
 # Só avança se as 3 fotos forem enviadas
 if r_a is not None and r_b is not None and r_c is not None:
