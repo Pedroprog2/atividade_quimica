@@ -39,9 +39,6 @@ def gerar_parametros_aluno(matricula: str):
     # Massa pesada para a titulação (g)
     massa_tit = round(float(rng.uniform(0.1200, 0.1600)), 4)
 
-    # Leitura inicial da bureta (Vi) entre 0.15 mL e 1.85 mL (múltiplo de 0.05)
-    vol_inicial_bureta = round(int(rng.integers(3, 38)) * 0.05, 2)
-
     # Massa pesada para a gravimetria (g)
     massa_grav = round(float(rng.uniform(0.4500, 0.5500)), 4)
 
@@ -65,7 +62,6 @@ def gerar_parametros_aluno(matricula: str):
     return {
         "teor_real": teor_real,
         "massa_tit": massa_tit,
-        "vol_inicial_bureta": vol_inicial_bureta,
         "massa_grav": massa_grav,
         "massa_cadinho": massa_cadinho,
         "conc_agno3": conc_agno3,
@@ -117,6 +113,7 @@ def salvar_no_google_forms(registro: dict):
             "Baixe o comprovante CSV abaixo e envie ao professor."
         )
 
+
 # ============================================================
 # ESTADO DA SESSÃO
 # ============================================================
@@ -164,7 +161,7 @@ st.success(f"Amostra gerada para **{nome_aluno}** (Matrícula: `{matricula.strip
 aba1, aba2, aba3 = st.tabs([
     "1️⃣ Sessão 1: Titulação (Método de Mohr)",
     "2️⃣ Sessão 2: Contraprova Gravimétrica",
-    "3️⃣ Cálculos Comparativos e Envio"
+    "3️⃣ Comparação e Envio"
 ])
 
 
@@ -178,7 +175,8 @@ with aba1:
         f"""
         **Dados da Bancada:**
         - Massa da amostra pesada e dissolvida em Erlenmeyer: **`{dados['massa_tit']:.4f} g`**
-        - Solução titulante na bureta: **$\mathrm{{AgNO_3}}$ `{dados['conc_agno3']:.4f} mol/L`**
+        - Solução titulante na bureta (zerada em `0,00 mL`): **$\mathrm{{AgNO_3}}$ `{dados['conc_agno3']:.4f} mol/L`**
+        - Massa molar do $\mathrm{{NaCl}}$: **`58,44 g/mol`**
         """
     )
 
@@ -213,7 +211,7 @@ with aba1:
 
         if condicoes_definidas:
             st.markdown("---")
-            st.subheader("2. Controle da Bureta (50,00 mL)")
+            st.subheader("2. Controle da Bureta")
             b1, b2, b3, b4 = st.columns(4)
             if b1.button("+ 1,00 mL", use_container_width=True):
                 st.session_state.volume_adicionado = round(st.session_state.volume_adicionado + 1.00, 2)
@@ -221,20 +219,11 @@ with aba1:
                 st.session_state.volume_adicionado = round(st.session_state.volume_adicionado + 0.10, 2)
             if b3.button("+ 0,05 mL", use_container_width=True):
                 st.session_state.volume_adicionado = round(st.session_state.volume_adicionado + 0.05, 2)
-            if b4.button("🔄 Reiniciar", use_container_width=True):
+            if b4.button("🔄 Zerar", use_container_width=True):
                 st.session_state.volume_adicionado = 0.00
 
-            vi = dados["vol_inicial_bureta"]
-            vf = round(vi + st.session_state.volume_adicionado, 2)
-
-            m_b1, m_b2 = st.columns(2)
-            m_b1.metric("Menisco Inicial (Vi)", f"{vi:.2f} mL")
-            m_b2.metric("Menisco Atual (Vf)", f"{vf:.2f} mL")
-
-            st.caption(
-                "💡 **Tarefa:** Anote a leitura inicial ($V_i$) e a leitura final no ponto de viragem ($V_f$) "
-                "para calcular o **volume gasto ($V_f - V_i$)** na Sessão 3."
-            )
+            vol_atual = st.session_state.volume_adicionado
+            st.metric("Volume de AgNO₃ escoado", f"{vol_atual:.2f} mL")
 
     with col_sim:
         st.subheader("Visualização do Erlenmeyer")
@@ -302,9 +291,21 @@ with aba1:
                 unsafe_allow_html=True,
             )
 
+    st.markdown("---")
+    st.subheader("3. Resultado da Titulação")
+    teor_tit_aluno = st.number_input(
+        "Com base no volume de AgNO₃ escoado até o ponto de viragem, calcule e informe o teor de NaCl (% m/m):",
+        min_value=0.0,
+        max_value=100.0,
+        value=0.0,
+        step=0.01,
+        format="%.2f",
+        key="input_teor_tit",
+    )
+
 
 # ============================================================
-# SESSÃO 2: CONTRAPROVA GRAVIMÉTRICA (ORDEM + PESAGEM POR DIFERENÇA)
+# SESSÃO 2: CONTRAPROVA GRAVIMÉTRICA
 # ============================================================
 
 with aba2:
@@ -315,10 +316,11 @@ with aba2:
         - Nova alíquota da mesma amostra pesada em balança analítica: **`{dados['massa_grav']:.4f} g`**
         - Massa do cadinho filtrante limpo e seco (tara): **`{dados['massa_cadinho']:.4f} g`**
         - Reagente precipitante disponível: **$\mathrm{{AgNO_3}}$ $0{{,}}20\ \mathrm{{mol/L}}$ (em excesso)**
+        - Massas molares: **$\mathrm{{NaCl}} = 58{{,}}44\ \mathrm{{g/mol}}$** | **$\mathrm{{AgCl}} = 143{{,}}32\ \mathrm{{g/mol}}$**
         """
     )
 
-    st.subheader("Monte o Protocolo na Ordem Cronológica de Execução")
+    st.subheader("1. Monte o Protocolo na Ordem Cronológica de Execução")
     st.caption(
         "⚠️ **Atenção:** Selecione as etapas **na exata ordem** em que devem ser realizadas no laboratório "
         "(a ordem em que você clica define a sequência do procedimento)."
@@ -422,104 +424,66 @@ with aba2:
         m_primeira_secagem = round(m_total_constante + 0.0042, 4)
 
         st.markdown("---")
-        st.subheader("📟 Leituras da Balança Analítica")
+        st.subheader("2. Leituras da Balança Analítica")
         b_col1, b_col2, b_col3 = st.columns(3)
         b_col1.metric("1. Cadinho vazio (tara)", f"{m_cad:.4f} g")
         b_col2.metric("2. Cadinho + Precipitado (1ª secagem)", f"{m_primeira_secagem:.4f} g")
         b_col3.metric("3. Cadinho + Precipitado (Massa constante)", f"{m_total_constante:.4f} g")
 
-        st.info(
-            "💡 **Tarefa:** Anote os valores acima e calcule a **massa líquida de $\mathrm{AgCl}$** "
-            "obtida por diferença para preencher o relatório na **Sessão 3**."
-        )
         st.caption(f"Status operacional: {st.session_state.diagnostico_grav}")
+
+    st.markdown("---")
+    st.subheader("3. Resultado da Gravimetria")
+    teor_grav_aluno = st.number_input(
+        "Com base na massa de AgCl obtida (por diferença entre o cadinho com precipitado e o cadinho vazio), calcule e informe o teor de NaCl (% m/m):",
+        min_value=0.0,
+        max_value=100.0,
+        value=0.0,
+        step=0.01,
+        format="%.2f",
+        key="input_teor_grav",
+    )
 
 
 # ============================================================
-# SESSÃO 3: CÁLCULOS DO ESTUDANTE E ENVIO PARA O DRIVE
+# SESSÃO 3: COMPARAÇÃO E ENVIO PARA O DRIVE
 # ============================================================
 
 with aba3:
-    st.header("Sessão 3 — Relatório de Resultados e Comparação")
+    st.header("Sessão 3 — Análise Comparativa e Envio de Resultados")
 
-    vi = dados["vol_inicial_bureta"]
-    vf = round(vi + st.session_state.volume_adicionado, 2)
+    col_res1, col_res2 = st.columns(2)
+    with col_res1:
+        with st.container(border=True):
+            st.subheader("1️⃣ Resumo — Titulação (Mohr)")
+            st.write(f"- **Massa da amostra:** `{dados['massa_tit']:.4f} g`")
+            st.write(f"- **Volume de $\mathrm{{AgNO_3}}$ escoado:** `{st.session_state.volume_adicionado:.2f} mL`")
+            st.write(f"- **Teor de $\mathrm{{NaCl}}$ informado por você:** **`{teor_tit_aluno:.2f}%`**")
 
-    if st.session_state.gravimetria_concluida:
-        m_cad = dados["massa_cadinho"]
-        m_total = round(m_cad + st.session_state.massa_agcl_obtida, 4)
-        resumo_grav_tela = (
-            f"Amostra = `{dados['massa_grav']:.4f} g` | "
-            f"Cadinho vazio = `{m_cad:.4f} g` | "
-            f"Cadinho + AgCl (massa constante) = `{m_total:.4f} g`"
-        )
-    else:
-        resumo_grav_tela = "Pendente (conclua a Sessão 2)"
-
-    st.markdown(
-        f"""
-        **Resumo das leituras registradas na sua bancada:**
-        - **Titulação:** Massa = `{dados['massa_tit']:.4f} g` | $[\mathrm{{AgNO_3}}]$ = `{dados['conc_agno3']:.4f} mol/L` | Menisco Inicial ($V_i$) = `{vi:.2f} mL` | Menisco Atual ($V_f$) = `{vf:.2f} mL`
-        - **Gravimetria:** {resumo_grav_tela}
-        - **Massas Molares:** $\mathrm{{NaCl}} = 58{{,}}44\ \mathrm{{g\,mol^{{-1}}}}$ | $\mathrm{{AgCl}} = 143{{,}}32\ \mathrm{{g\,mol^{{-1}}}}$
-        """
-    )
+    with col_res2:
+        with st.container(border=True):
+            st.subheader("2️⃣ Resumo — Gravimetria")
+            st.write(f"- **Massa da amostra:** `{dados['massa_grav']:.4f} g`")
+            if st.session_state.gravimetria_concluida:
+                m_total = round(dados["massa_cadinho"] + st.session_state.massa_agcl_obtida, 4)
+                st.write(f"- **Cadinho vazio / Massa constante:** `{dados['massa_cadinho']:.4f} g` / `{m_total:.4f} g`")
+            else:
+                st.write("- **Pesagem:** *Pendente (execute a Sessão 2)*")
+            st.write(f"- **Teor de $\mathrm{{NaCl}}$ informado por você:** **`{teor_grav_aluno:.2f}%`**")
 
     with st.form("form_relatorio"):
-        col_r1, col_r2 = st.columns(2)
-        with col_r1:
-            st.subheader("Resultados da Titulação")
-            vol_informado = st.number_input(
-                "Volume gasto de AgNO₃ calculado (Vf - Vi) (mL):",
-                min_value=0.0,
-                value=0.0,
-                step=0.01,
-                format="%.2f",
-            )
-            teor_tit_aluno = st.number_input(
-                "Teor de NaCl calculado pela Titulação (% m/m):",
-                min_value=0.0,
-                max_value=100.0,
-                step=0.01,
-                format="%.2f",
-            )
-
-        with col_r2:
-            st.subheader("Resultados da Gravimetria")
-            massa_agcl_aluno = st.number_input(
-                "Massa líquida de AgCl calculada por diferença (g):",
-                min_value=0.0,
-                max_value=5.0,
-                step=0.0001,
-                format="%.4f",
-            )
-            fg_aluno = st.number_input(
-                "Fator Gravimétrico (NaCl / AgCl) calculado:",
-                min_value=0.0,
-                max_value=2.0,
-                step=0.0001,
-                format="%.4f",
-            )
-            teor_grav_aluno = st.number_input(
-                "Teor de NaCl calculado pela Gravimetria (% m/m):",
-                min_value=0.0,
-                max_value=100.0,
-                step=0.01,
-                format="%.2f",
-            )
-
         discussao = st.text_area(
-            "Discussão comparativa (explique por que os meios reacionais diferem entre os dois métodos e avalie a concordância entre os teores obtidos):",
-            height=130,
+            "Discussão comparativa (explique por que as condições de pH diferem entre os dois métodos e avalie a concordância entre os teores de NaCl encontrados):",
+            height=140,
         )
 
-        enviado = st.form_submit_button("📤 Enviar Relatório para o Professor", type="primary")
+        enviado = st.form_submit_button("📤 Enviar Relatório Final", type="primary")
 
     if enviado:
-        if st.session_state.massa_agcl_obtida is None or st.session_state.volume_adicionado == 0:
-            st.error("Conclua tanto a Titulação quanto a Gravimetria antes de enviar!")
-        elif vol_informado == 0 or massa_agcl_aluno == 0:
-            st.warning("Calcule e preencha o volume gasto (Vf - Vi) e a massa líquida de AgCl antes de enviar.")
+        if st.session_state.volume_adicionado <= 0 or st.session_state.massa_agcl_obtida is None:
+            st.error("Conclua o procedimento experimental nas Sessões 1 e 2 antes de enviar.")
+        elif teor_tit_aluno <= 0 or teor_grav_aluno <= 0:
+            st.error("Preencha os teores de NaCl calculados nas Sessões 1 e 2 (devem ser maiores que 0,00%) antes de enviar.")
         elif len(discussao.strip()) < 15:
             st.warning("Escreva uma breve discussão comparativa antes de enviar.")
         else:
@@ -531,14 +495,11 @@ with aba3:
                 "Massa_Tit_g": dados["massa_tit"],
                 "Conc_AgNO3": dados["conc_agno3"],
                 "Vol_PF_Teorico_mL": dados["vol_pf_mohr"],
-                "Vol_Real_Escoado_mL": st.session_state.volume_adicionado,
-                "Vol_Informado_mL": vol_informado,
+                "Vol_Escoado_mL": st.session_state.volume_adicionado,
                 "Teor_Tit_Aluno": teor_tit_aluno,
                 "Massa_Grav_g": dados["massa_grav"],
                 "Massa_AgCl_Teorica_g": dados["massa_agcl_teorica"],
                 "Massa_AgCl_Obtida_g": st.session_state.massa_agcl_obtida,
-                "Massa_AgCl_Aluno_g": massa_agcl_aluno,
-                "FG_Aluno": fg_aluno,
                 "Teor_Grav_Aluno": teor_grav_aluno,
                 "Diagnostico_Gravimetria": st.session_state.diagnostico_grav,
                 "Discussao": discussao.strip(),
@@ -557,5 +518,4 @@ with aba3:
                 file_name=f"relatorio_{matricula.strip()}.csv",
                 mime="text/csv",
             )
-
 
