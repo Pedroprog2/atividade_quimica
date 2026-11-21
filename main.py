@@ -7,7 +7,7 @@ from datetime import datetime
 # Para integração com Google Sheets / Drive:
 # pip install streamlit gspread google-auth
 import gspread
-from google.oauth2.service_account import Credentials
+
 
 
 # ============================================================
@@ -76,31 +76,36 @@ def gerar_parametros_aluno(matricula: str):
 # FUNÇÃO DE SALVAMENTO NO GOOGLE SHEETS (DRIVE)
 # ============================================================
 
-def salvar_no_google_sheets(registro: dict):
+import requests
+
+def salvar_no_google_forms(registro: dict):
     """
-    Salva o dicionário como uma nova linha na planilha configurada em st.secrets.
+    Envia os dados diretamente para um Google Forms vinculado a uma Planilha no Drive.
+    100% gratuito, sem chave JSON e sem expiração.
     """
+    # Substitua pelo link do seu formulário terminando em /formResponse
+    FORM_URL = "https://docs.google.com/forms/d/e/SEU_ID_DO_FORMULARIO/formResponse"
+
+    # Mapeie os códigos entry.XXXXXXX obtidos no 'Link preenchido automaticamente'
+    payload = {
+        "entry.111111111": registro["Matricula"],
+        "entry.222222222": registro["Nome"],
+        "entry.333333333": (
+            f"Real: {registro['Teor_Real_Gabarito']}% | "
+            f"Tit_Aluno: {registro['Teor_Tit_Aluno']}% (Vol: {registro['Vol_Informado_mL']}/{registro['Vol_PF_Teorico_mL']} mL) | "
+            f"Grav_Aluno: {registro['Teor_Grav_Aluno']}% (AgCl: {registro['Massa_AgCl_Obtida_g']}/{registro['Massa_AgCl_Teorica_g']} g) | "
+            f"Diag: {registro['Diagnostico_Gravimetria']}"
+        ),
+        "entry.444444444": registro["Discussao"],
+    }
+
     try:
-        scopes = [
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ]
-        creds = Credentials.from_service_account_info(
-            st.secrets["gcp_service_account"], scopes=scopes
-        )
-        client = gspread.authorize(creds)
-        sheet = client.open_by_key(st.secrets["spreadsheet_id"]).sheet1
-
-        # Cria cabeçalho se a planilha estiver vazia
-        if len(sheet.get_all_values()) == 0:
-            sheet.append_row(list(registro.keys()))
-
-        sheet.append_row(list(registro.values()))
-        return True, "Respostas salvas com sucesso na planilha do professor!"
+        resposta = requests.post(FORM_URL, data=payload, timeout=10)
+        if resposta.status_code == 200:
+            return True, "✅ Respostas enviadas e salvas na planilha do professor!"
+        return False, f"Erro ao enviar (código {resposta.status_code}). Baixe o comprovante CSV abaixo."
     except Exception as e:
-        return False, f"Não foi possível conectar ao Google Drive: {e}"
-
-
+        return False, f"Falha de conexão: {e}. Baixe o comprovante CSV abaixo."
 # ============================================================
 # ESTADO DA SESSÃO
 # ============================================================
