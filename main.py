@@ -314,7 +314,6 @@ with aba2:
         f"""
         **Dados Iniciais da Bancada:**
         - Nova alíquota da mesma amostra pesada em balança analítica: **`{dados['massa_grav']:.4f} g`**
-        - Massa do cadinho filtrante limpo e seco (tara): **`{dados['massa_cadinho']:.4f} g`**
         - Reagente precipitante disponível: **$\mathrm{{AgNO_3}}$ $0{{,}}20\ \mathrm{{mol/L}}$ (em excesso)**
         - Massas molares: **$\mathrm{{NaCl}} = 58{{,}}44\ \mathrm{{g/mol}}$** | **$\mathrm{{AgCl}} = 143{{,}}32\ \mathrm{{g/mol}}$**
         """
@@ -345,7 +344,15 @@ with aba2:
             OP_FILTRAR_AGUA,
             OP_LUZ,
         ],
+        key=f"etapas_{matricula.strip()}",
     )
+
+    # Se o aluno mudar qualquer etapa após ter executado, oculta as pesagens anteriores
+    if "ultima_sequencia_grav" not in st.session_state:
+        st.session_state.ultima_sequencia_grav = []
+    if etapas_selecionadas != st.session_state.ultima_sequencia_grav:
+        st.session_state.gravimetria_concluida = False
+        st.session_state.massa_agcl_obtida = None
 
     if etapas_selecionadas:
         st.markdown("**Sequência montada por você:**")
@@ -413,6 +420,7 @@ with aba2:
 
                 st.session_state.massa_agcl_obtida = round(massa_final, 4)
                 st.session_state.gravimetria_concluida = True
+                st.session_state.ultima_sequencia_grav = list(etapas_selecionadas)
                 st.session_state.diagnostico_grav = (
                     "Ordem e protocolo corretos!" if not obs else " | ".join(obs)
                 )
@@ -431,6 +439,8 @@ with aba2:
         b_col3.metric("3. Cadinho + Precipitado (Massa constante)", f"{m_total_constante:.4f} g")
 
         st.caption(f"Status operacional: {st.session_state.diagnostico_grav}")
+    else:
+        st.info("🔒 As leituras da balança analítica serão liberadas após você montar o protocolo e clicar em **Executar Procedimento e Realizar Pesagens**.")
 
     st.markdown("---")
     st.subheader("3. Resultado da Gravimetria")
@@ -443,8 +453,6 @@ with aba2:
         format="%.2f",
         key="input_teor_grav",
     )
-
-
 # ============================================================
 # SESSÃO 3: COMPARAÇÃO E ENVIO PARA O DRIVE
 # ============================================================
