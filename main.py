@@ -2,12 +2,8 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import hashlib
+import requests
 from datetime import datetime
-
-# Para integração com Google Sheets / Drive:
-# pip install streamlit gspread google-auth
-import gspread
-
 
 
 # ============================================================
@@ -20,7 +16,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Constantes químicas
+# Constantes químicas (g/mol)
 MM_NACL = 58.44
 MM_AGCL = 143.32
 
@@ -41,7 +37,6 @@ def gerar_parametros_aluno(matricula: str):
     teor_real = round(float(rng.uniform(74.0, 95.5)), 2)
 
     # Massa pesada para a titulação (g) - aprox. 0.1200 g a 0.1600 g
-    # (garante volume de titulante ~0.10 mol/L entre 18 mL e 30 mL)
     massa_tit = round(float(rng.uniform(0.1200, 0.1600)), 4)
 
     # Massa pesada para a gravimetria (g) - aprox. 0.4500 g a 0.5500 g
@@ -73,39 +68,53 @@ def gerar_parametros_aluno(matricula: str):
 
 
 # ============================================================
-# FUNÇÃO DE SALVAMENTO NO GOOGLE SHEETS (DRIVE)
+# FUNÇÃO DE SALVAMENTO VIA GOOGLE FORMS -> GOOGLE DRIVE
 # ============================================================
-
-import requests
 
 def salvar_no_google_forms(registro: dict):
     """
     Envia os dados diretamente para um Google Forms vinculado a uma Planilha no Drive.
-    100% gratuito, sem chave JSON e sem expiração.
     """
-    # Substitua pelo link do seu formulário terminando em /formResponse
-    FORM_URL = "https://docs.google.com/forms/d/e/SEU_ID_DO_FORMULARIO/formResponse"
+    # 1. Substitua pelo link do seu formulário terminando em /formResponse
+    FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfT9FP6VuirUdoRaebDt_4fufS5-g2TDAkh3oZRbNUAd-TUxA/viewform?usp=publish-editor/formResponse"
 
-    # Mapeie os códigos entry.XXXXXXX obtidos no 'Link preenchido automaticamente'
+    # 2. Substitua os códigos entry.XXXXXXX pelos obtidos no 'Link preenchido automaticamente'
+    resumo_numerico = (
+        f"Data: {registro['Data_Hora']} | "
+        f"Gabarito_Real: {registro['Teor_Real_Gabarito']}% | "
+        f"Tit_Aluno: {registro['Teor_Tit_Aluno']}% "
+        f"(Vol: {registro['Vol_Informado_mL']}/{registro['Vol_PF_Teorico_mL']} mL; "
+        f"m={registro['Massa_Tit_g']}g; C={registro['Conc_AgNO3']}M) | "
+        f"Grav_Aluno: {registro['Teor_Grav_Aluno']}% "
+        f"(FG: {registro['FG_Aluno']}; AgCl: {registro['Massa_AgCl_Obtida_g']}/{registro['Massa_AgCl_Teorica_g']} g; "
+        f"m={registro['Massa_Grav_g']}g) | "
+        f"Diag_Grav: {registro['Diagnostico_Gravimetria']}"
+    )
+
     payload = {
-        "entry.111111111": registro["Matricula"],
-        "entry.222222222": registro["Nome"],
-        "entry.333333333": (
-            f"Real: {registro['Teor_Real_Gabarito']}% | "
-            f"Tit_Aluno: {registro['Teor_Tit_Aluno']}% (Vol: {registro['Vol_Informado_mL']}/{registro['Vol_PF_Teorico_mL']} mL) | "
-            f"Grav_Aluno: {registro['Teor_Grav_Aluno']}% (AgCl: {registro['Massa_AgCl_Obtida_g']}/{registro['Massa_AgCl_Teorica_g']} g) | "
-            f"Diag: {registro['Diagnostico_Gravimetria']}"
-        ),
-        "entry.444444444": registro["Discussao"],
+        "entry.901326228": registro["Matricula"],
+        "entry.1845306876": registro["Nome"],
+        "entry.1100499664": resumo_numerico,
+        "entry.823625954": registro["Discussao"],
     }
 
     try:
         resposta = requests.post(FORM_URL, data=payload, timeout=10)
         if resposta.status_code == 200:
-            return True, "✅ Respostas enviadas e salvas na planilha do professor!"
-        return False, f"Erro ao enviar (código {resposta.status_code}). Baixe o comprovante CSV abaixo."
+            return True, "✅ Respostas enviadas e registradas com sucesso na planilha do professor!"
+        return (
+            False,
+            f"⚠️ O formulário retornou código {resposta.status_code}. "
+            "Verifique os IDs (entry) ou baixe o comprovante CSV abaixo."
+        )
     except Exception as e:
-        return False, f"Falha de conexão: {e}. Baixe o comprovante CSV abaixo."
+        return (
+            False,
+            f"⚠️ Falha de conexão ao enviar ({e}). "
+            "Baixe o comprovante CSV abaixo e envie ao professor."
+        )
+
+
 # ============================================================
 # ESTADO DA SESSÃO
 # ============================================================
@@ -144,6 +153,7 @@ if not nome_aluno.strip() or len(matricula.strip()) < 4:
 dados = gerar_parametros_aluno(matricula)
 
 st.success(f"Amostra gerada para **{nome_aluno}** (Matrícula: `{matricula.strip()}`)")
+
 
 # ============================================================
 # ABAS DAS DUAS SESSÕES + RELATÓRIO FINAL
@@ -223,15 +233,17 @@ with aba1:
             vol = st.session_state.volume_adicionado
             pf = dados["vol_pf_mohr"]
 
-            # Lógica química realista das condições escolhidas
             if condicao_ph == "Meio fortemente alcalino (pH > 12 com NaOH)":
                 cor_hex = "#3E2723"
-                status_txt = "⚠️ Precipitado marrom-escuro imediato de Ag₂O! O excesso de OH⁻ precipita a prata antes do cloreto."
+                status_txt = (
+                    "⚠️ Precipitado marrom-escuro imediato de Ag₂O! "
+                    "O excesso de OH⁻ precipita a prata antes do cloreto."
+                )
             elif indicador != "Cromato de potássio (K₂CrO₄ 5% m/v)":
                 cor_hex = "#F5F5F5"
                 status_txt = (
-                    f"Solução turva esbranquiçada (AgCl formado). "
-                    f"Como você não usou K₂CrO₄, não há mudança de cor visível no ponto final!"
+                    "Solução turva esbranquiçada (AgCl formado). "
+                    "Como você não usou K₂CrO₄, não há mudança de cor visível no ponto final!"
                 )
             elif condicao_ph == "Meio fortemente ácido (pH < 2 com HNO₃)":
                 cor_hex = "#FF9800"
@@ -240,7 +252,6 @@ with aba1:
                     "impedindo a precipitação de Ag₂CrO₄ no ponto de equivalência."
                 )
             else:
-                # Condições corretas: K2CrO4 + pH 6,5 - 10,0
                 if vol == 0:
                     cor_hex = "#FFF176"
                     status_txt = "Solução amarela límpida (íons CrO₄²⁻ em solução)."
@@ -257,6 +268,7 @@ with aba1:
                     cor_hex = "#8E24AA" if vol > pf + 2 else "#B71C1C"
                     status_txt = "⚠️ Passou do ponto final! Excesso elevado de AgNO₃."
 
+            texto_claro = cor_hex in ["#3E2723", "#D84315", "#B71C1C", "#8E24AA"]
             st.markdown(
                 f"""
                 <div style="
@@ -269,7 +281,7 @@ with aba1:
                     justify-content: center;
                     padding: 20px;
                     text-align: center;
-                    color: {'#FFFFFF' if cor_hex in ['#3E2723', '#D84315', '#B71C1C', '#8E24AA'] else '#111111'};
+                    color: {'#FFFFFF' if texto_claro else '#111111'};
                     font-weight: 600;
                     font-size: 1.05rem;
                 ">
@@ -317,7 +329,6 @@ with aba2:
             massa_final = dados["massa_agcl_teorica"]
             obs = []
 
-            # Avaliação das escolhas experimentais
             if "2. Alcalinizar a solução com NaOH antes de precipitar" in etapas_selecionadas:
                 massa_final *= 1.12
                 obs.append("Erro positivo: coprecipitação de Ag₂O/carbonatos por falta de acidificação.")
@@ -361,11 +372,17 @@ with aba2:
 with aba3:
     st.header("Sessão 3 — Relatório de Resultados e Comparação")
 
+    massa_agcl_txt = (
+        f"{st.session_state.massa_agcl_obtida:.4f} g"
+        if st.session_state.massa_agcl_obtida is not None
+        else "Pendente"
+    )
+
     st.markdown(
         f"""
         **Resumo dos dados obtidos na sua bancada:**
         - **Titulação:** Massa = `{dados['massa_tit']:.4f} g` | $[\mathrm{{AgNO_3}}]$ = `{dados['conc_agno3']:.4f} mol/L` | Volume anotado = `{st.session_state.volume_adicionado:.2f} mL`
-        - **Gravimetria:** Massa = `{dados['massa_grav']:.4f} g` | Massa de $\mathrm{{AgCl}}$ = `{st.session_state.massa_agcl_obtida if st.session_state.massa_agcl_obtida else 'Pendente'} g`
+        - **Gravimetria:** Massa = `{dados['massa_grav']:.4f} g` | Massa de $\mathrm{{AgCl}}$ = `{massa_agcl_txt}`
         - **Massas Molares:** $\mathrm{{NaCl}} = 58{{,}}44\ \mathrm{{g\,mol^{{-1}}}}$ | $\mathrm{{AgCl}} = 143{{,}}32\ \mathrm{{g\,mol^{{-1}}}}$
         """
     )
@@ -436,7 +453,7 @@ with aba3:
                 "Discussao": discussao.strip(),
             }
 
-            sucesso, msg = salvar_no_google_sheets(registro)
+            sucesso, msg = salvar_no_google_forms(registro)
             if sucesso:
                 st.success(msg)
             else:
