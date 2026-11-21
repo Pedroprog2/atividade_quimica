@@ -1,8 +1,4 @@
 streamlit
-pandas
-pillow
-piexif
-scipy
-reportlab
 numpy
-pillow-heif
+pandas
+requests
