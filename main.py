@@ -78,14 +78,14 @@ def salvar_no_google_forms(registro: dict):
     FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfT9FP6VuirUdoRaebDt_4fufS5-g2TDAkh3oZRbNUAd-TUxA/formResponse"
 
     # 2. Substitua os códigos entry.XXXXXXX pelos obtidos no 'Link preenchido automaticamente'
-    resumo_numerico = (
+  resumo_numerico = (
         f"Data: {registro['Data_Hora']} | "
         f"Gabarito_Real: {registro['Teor_Real_Gabarito']}% | "
         f"Tit_Aluno: {registro['Teor_Tit_Aluno']}% "
         f"(Vol: {registro['Vol_Escoado_mL']}/{registro['Vol_PF_Teorico_mL']} mL; "
         f"m={registro['Massa_Tit_g']}g; C={registro['Conc_AgNO3']}M) | "
         f"Grav_Aluno: {registro['Teor_Grav_Aluno']}% "
-        f"(FG: {registro['FG_Aluno']}; AgCl: {registro['Massa_AgCl_Obtida_g']}/{registro['Massa_AgCl_Teorica_g']} g; "
+        f"(AgCl: {registro['Massa_AgCl_Obtida_g']}/{registro['Massa_AgCl_Teorica_g']} g; "
         f"m={registro['Massa_Grav_g']}g) | "
         f"Diag_Grav: {registro['Diagnostico_Gravimetria']}"
     )
