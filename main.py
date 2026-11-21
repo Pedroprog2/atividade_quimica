@@ -36,11 +36,17 @@ def gerar_parametros_aluno(matricula: str):
     # Teor real de NaCl na amostra (%) - oculto do aluno
     teor_real = round(float(rng.uniform(74.0, 95.5)), 2)
 
-    # Massa pesada para a titulação (g) - aprox. 0.1200 g a 0.1600 g
+    # Massa pesada para a titulação (g)
     massa_tit = round(float(rng.uniform(0.1200, 0.1600)), 4)
 
-    # Massa pesada para a gravimetria (g) - aprox. 0.4500 g a 0.5500 g
+    # Leitura inicial da bureta (Vi) entre 0.15 mL e 1.85 mL (múltiplo de 0.05)
+    vol_inicial_bureta = round(int(rng.integers(3, 38)) * 0.05, 2)
+
+    # Massa pesada para a gravimetria (g)
     massa_grav = round(float(rng.uniform(0.4500, 0.5500)), 4)
+
+    # Massa do cadinho filtrante vazio (g)
+    massa_cadinho = round(float(rng.uniform(18.2000, 24.8000)), 4)
 
     # Concentração padronizada do AgNO3 (mol/L)
     conc_agno3 = round(float(rng.uniform(0.0980, 0.1040)), 4)
@@ -59,17 +65,14 @@ def gerar_parametros_aluno(matricula: str):
     return {
         "teor_real": teor_real,
         "massa_tit": massa_tit,
+        "vol_inicial_bureta": vol_inicial_bureta,
         "massa_grav": massa_grav,
+        "massa_cadinho": massa_cadinho,
         "conc_agno3": conc_agno3,
         "vol_eq_tit": vol_eq_tit,
         "vol_pf_mohr": vol_pf_mohr,
         "massa_agcl_teorica": massa_agcl_teorica,
     }
-
-
-# ============================================================
-# FUNÇÃO DE SALVAMENTO VIA GOOGLE FORMS -> GOOGLE DRIVE
-# ============================================================
 
 def salvar_no_google_forms(registro: dict):
     """
@@ -113,7 +116,6 @@ def salvar_no_google_forms(registro: dict):
             f"⚠️ Falha de conexão ao enviar ({e}). "
             "Baixe o comprovante CSV abaixo e envie ao professor."
         )
-
 
 # ============================================================
 # ESTADO DA SESSÃO
@@ -211,7 +213,7 @@ with aba1:
 
         if condicoes_definidas:
             st.markdown("---")
-            st.subheader("2. Controle da Bureta")
+            st.subheader("2. Controle da Bureta (50,00 mL)")
             b1, b2, b3, b4 = st.columns(4)
             if b1.button("+ 1,00 mL", use_container_width=True):
                 st.session_state.volume_adicionado = round(st.session_state.volume_adicionado + 1.00, 2)
@@ -219,11 +221,20 @@ with aba1:
                 st.session_state.volume_adicionado = round(st.session_state.volume_adicionado + 0.10, 2)
             if b3.button("+ 0,05 mL", use_container_width=True):
                 st.session_state.volume_adicionado = round(st.session_state.volume_adicionado + 0.05, 2)
-            if b4.button("🔄 Zerar", use_container_width=True):
+            if b4.button("🔄 Reiniciar", use_container_width=True):
                 st.session_state.volume_adicionado = 0.00
 
-            vol_atual = st.session_state.volume_adicionado
-            st.metric("Volume de AgNO₃ escoado", f"{vol_atual:.2f} mL")
+            vi = dados["vol_inicial_bureta"]
+            vf = round(vi + st.session_state.volume_adicionado, 2)
+
+            m_b1, m_b2 = st.columns(2)
+            m_b1.metric("Menisco Inicial (Vi)", f"{vi:.2f} mL")
+            m_b2.metric("Menisco Atual (Vf)", f"{vf:.2f} mL")
+
+            st.caption(
+                "💡 **Tarefa:** Anote a leitura inicial ($V_i$) e a leitura final no ponto de viragem ($V_f$) "
+                "para calcular o **volume gasto ($V_f - V_i$)** na Sessão 3."
+            )
 
     with col_sim:
         st.subheader("Visualização do Erlenmeyer")
@@ -293,76 +304,135 @@ with aba1:
 
 
 # ============================================================
-# SESSÃO 2: CONTRAPROVA GRAVIMÉTRICA
+# SESSÃO 2: CONTRAPROVA GRAVIMÉTRICA (ORDEM + PESAGEM POR DIFERENÇA)
 # ============================================================
 
 with aba2:
     st.header("Sessão 2 — Contraprova por Gravimetria de Precipitação")
     st.markdown(
         f"""
-        **Dados da Bancada:**
+        **Dados Iniciais da Bancada:**
         - Nova alíquota da mesma amostra pesada em balança analítica: **`{dados['massa_grav']:.4f} g`**
+        - Massa do cadinho filtrante limpo e seco (tara): **`{dados['massa_cadinho']:.4f} g`**
         - Reagente precipitante disponível: **$\mathrm{{AgNO_3}}$ $0{{,}}20\ \mathrm{{mol/L}}$ (em excesso)**
         """
     )
 
-    st.subheader("Selecione o Protocolo Experimental")
-    st.caption("Marque as etapas e condições que você aplicará no laboratório antes de pesar o cadinho:")
+    st.subheader("Monte o Protocolo na Ordem Cronológica de Execução")
+    st.caption(
+        "⚠️ **Atenção:** Selecione as etapas **na exata ordem** em que devem ser realizadas no laboratório "
+        "(a ordem em que você clica define a sequência do procedimento)."
+    )
+
+    OP_DISSOLVER = "Dissolver a amostra em água destilada e acidificar com HNO₃ diluído"
+    OP_ALCALINIZAR = "Dissolver a amostra e alcalinizar com NaOH diluído"
+    OP_PRECIPITAR = "Adicionar excesso de AgNO₃ sob agitação e aquecer suavemente para coagulação"
+    OP_LUZ = "Manter o béquer protegido da incidência direta de luz"
+    OP_FILTRAR_HNO3 = "Filtrar no cadinho tarado e lavar o precipitado com solução diluída de HNO₃"
+    OP_FILTRAR_AGUA = "Filtrar no cadinho tarado e lavar o precipitado apenas com água destilada pura"
+    OP_SECAR = "Secar o cadinho em estufa a 110–120 °C até massa constante"
 
     etapas_selecionadas = st.multiselect(
-        "Etapas do procedimento gravimétrico:",
+        "Clique nas etapas na sequência correta:",
         [
-            "1. Acidificar a solução com HNO₃ diluído antes de precipitar",
-            "2. Alcalinizar a solução com NaOH antes de precipitar",
-            "3. Adicionar excesso de AgNO₃ sob agitação e aquecer suavemente para coagulação",
-            "4. Manter o sistema protegido da luz solar direta",
-            "5. Filtrar e lavar o precipitado apenas com água destilada pura",
-            "6. Filtrar e lavar o precipitado com solução diluída de HNO₃",
-            "7. Secar em estufa a 110–120 °C até massa constante",
+            OP_FILTRAR_HNO3,
+            OP_SECAR,
+            OP_ALCALINIZAR,
+            OP_PRECIPITAR,
+            OP_DISSOLVER,
+            OP_FILTRAR_AGUA,
+            OP_LUZ,
         ],
     )
 
-    if st.button("🔬 Executar Procedimento Gravimétrico e Pesar", type="primary"):
+    if etapas_selecionadas:
+        st.markdown("**Sequência montada por você:**")
+        for idx, item in enumerate(etapas_selecionadas, start=1):
+            st.write(f"**{idx}º.** {item}")
+
+    if st.button("🔬 Executar Procedimento e Realizar Pesagens", type="primary"):
         if len(etapas_selecionadas) < 4:
-            st.error("Protocolo incompleto! Selecione todas as etapas essenciais do procedimento.")
+            st.error("Protocolo incompleto! Selecione todas as etapas necessárias.")
         else:
-            massa_final = dados["massa_agcl_teorica"]
-            obs = []
-
-            if "2. Alcalinizar a solução com NaOH antes de precipitar" in etapas_selecionadas:
-                massa_final *= 1.12
-                obs.append("Erro positivo: coprecipitação de Ag₂O/carbonatos por falta de acidificação.")
-            elif "1. Acidificar a solução com HNO₃ diluído antes de precipitar" not in etapas_selecionadas:
-                massa_final *= 1.06
-                obs.append("Erro positivo: ausência de HNO₃ permitiu coprecipitação de interferentes.")
-
-            if "5. Filtrar e lavar o precipitado apenas com água destilada pura" in etapas_selecionadas:
-                massa_final *= 0.93
-                obs.append("Erro negativo: lavagem com água pura causou peptização parcial do coloide AgCl.")
-            elif "6. Filtrar e lavar o precipitado com solução diluída de HNO₃" not in etapas_selecionadas:
-                massa_final *= 1.04
-                obs.append("Erro positivo: precipitado não lavado adequadamente reteve impurezas adsorvidas.")
-
-            if "4. Manter o sistema protegido da luz solar direta" not in etapas_selecionadas:
-                massa_final *= 0.97
-                obs.append("Erro negativo: fotodecomposição parcial do AgCl com perda de Cl₂(g).")
-
-            if "7. Secar em estufa a 110–120 °C até massa constante" not in etapas_selecionadas:
-                massa_final *= 1.08
-                obs.append("Erro positivo: precipitado úmido (não seco até massa constante).")
-
-            st.session_state.massa_agcl_obtida = round(massa_final, 4)
-            st.session_state.gravimetria_concluida = True
-            st.session_state.diagnostico_grav = (
-                "Protocolo executado adequadamente!" if not obs else " | ".join(obs)
+            pos_precip = (
+                etapas_selecionadas.index(OP_PRECIPITAR)
+                if OP_PRECIPITAR in etapas_selecionadas
+                else -1
+            )
+            pos_filtrar = max(
+                etapas_selecionadas.index(OP_FILTRAR_HNO3) if OP_FILTRAR_HNO3 in etapas_selecionadas else -1,
+                etapas_selecionadas.index(OP_FILTRAR_AGUA) if OP_FILTRAR_AGUA in etapas_selecionadas else -1,
+            )
+            pos_secar = (
+                etapas_selecionadas.index(OP_SECAR)
+                if OP_SECAR in etapas_selecionadas
+                else -1
             )
 
+            if pos_precip == -1 or pos_filtrar == -1:
+                st.error("Faltam etapas essenciais de precipitação ou filtração no seu protocolo.")
+            elif pos_filtrar < pos_precip:
+                st.error("❌ Erro de sequência física: você tentou filtrar antes de precipitar o AgCl!")
+            elif pos_secar != -1 and pos_secar < pos_filtrar:
+                st.error("❌ Erro de sequência física: você colocou o cadinho na estufa antes de filtrar o precipitado!")
+            else:
+                massa_final = dados["massa_agcl_teorica"]
+                obs = []
+
+                pos_meio = max(
+                    etapas_selecionadas.index(OP_DISSOLVER) if OP_DISSOLVER in etapas_selecionadas else -1,
+                    etapas_selecionadas.index(OP_ALCALINIZAR) if OP_ALCALINIZAR in etapas_selecionadas else -1,
+                )
+
+                if OP_ALCALINIZAR in etapas_selecionadas:
+                    massa_final *= 1.12
+                    obs.append("Erro positivo: meio alcalino causou coprecipitação de Ag₂O/carbonatos.")
+                elif OP_DISSOLVER not in etapas_selecionadas:
+                    massa_final *= 1.06
+                    obs.append("Erro positivo: falta de acidificação prévia com HNO₃ permitiu coprecipitação.")
+                elif pos_meio > pos_precip:
+                    massa_final *= 1.04
+                    obs.append("Erro de ordem: o HNO₃ foi adicionado após a precipitação, retendo interferentes coprecipitados.")
+
+                if OP_FILTRAR_AGUA in etapas_selecionadas:
+                    massa_final *= 0.93
+                    obs.append("Erro negativo: lavagem com água pura causou peptização parcial do AgCl.")
+                elif OP_FILTRAR_HNO3 not in etapas_selecionadas:
+                    massa_final *= 1.04
+                    obs.append("Erro positivo: precipitado não lavado adequadamente.")
+
+                if OP_LUZ not in etapas_selecionadas:
+                    massa_final *= 0.97
+                    obs.append("Erro negativo: fotodecomposição parcial do AgCl pela luz.")
+
+                if OP_SECAR not in etapas_selecionadas:
+                    massa_final *= 1.08
+                    obs.append("Erro positivo: precipitado pesado úmido (sem secagem até massa constante).")
+
+                st.session_state.massa_agcl_obtida = round(massa_final, 4)
+                st.session_state.gravimetria_concluida = True
+                st.session_state.diagnostico_grav = (
+                    "Ordem e protocolo corretos!" if not obs else " | ".join(obs)
+                )
+
     if st.session_state.gravimetria_concluida:
-        st.success(
-            f"**Massa de $\mathrm{{AgCl}}$ obtida na balança analítica:** "
-            f"`{st.session_state.massa_agcl_obtida:.4f} g`"
+        m_cad = dados["massa_cadinho"]
+        m_agcl = st.session_state.massa_agcl_obtida
+        m_total_constante = round(m_cad + m_agcl, 4)
+        m_primeira_secagem = round(m_total_constante + 0.0042, 4)
+
+        st.markdown("---")
+        st.subheader("📟 Leituras da Balança Analítica")
+        b_col1, b_col2, b_col3 = st.columns(3)
+        b_col1.metric("1. Cadinho vazio (tara)", f"{m_cad:.4f} g")
+        b_col2.metric("2. Cadinho + Precipitado (1ª secagem)", f"{m_primeira_secagem:.4f} g")
+        b_col3.metric("3. Cadinho + Precipitado (Massa constante)", f"{m_total_constante:.4f} g")
+
+        st.info(
+            "💡 **Tarefa:** Anote os valores acima e calcule a **massa líquida de $\mathrm{AgCl}$** "
+            "obtida por diferença para preencher o relatório na **Sessão 3**."
         )
-        st.caption(f"Observação técnica: {st.session_state.diagnostico_grav}")
+        st.caption(f"Status operacional: {st.session_state.diagnostico_grav}")
 
 
 # ============================================================
@@ -372,17 +442,25 @@ with aba2:
 with aba3:
     st.header("Sessão 3 — Relatório de Resultados e Comparação")
 
-    massa_agcl_txt = (
-        f"{st.session_state.massa_agcl_obtida:.4f} g"
-        if st.session_state.massa_agcl_obtida is not None
-        else "Pendente"
-    )
+    vi = dados["vol_inicial_bureta"]
+    vf = round(vi + st.session_state.volume_adicionado, 2)
+
+    if st.session_state.gravimetria_concluida:
+        m_cad = dados["massa_cadinho"]
+        m_total = round(m_cad + st.session_state.massa_agcl_obtida, 4)
+        resumo_grav_tela = (
+            f"Amostra = `{dados['massa_grav']:.4f} g` | "
+            f"Cadinho vazio = `{m_cad:.4f} g` | "
+            f"Cadinho + AgCl (massa constante) = `{m_total:.4f} g`"
+        )
+    else:
+        resumo_grav_tela = "Pendente (conclua a Sessão 2)"
 
     st.markdown(
         f"""
-        **Resumo dos dados obtidos na sua bancada:**
-        - **Titulação:** Massa = `{dados['massa_tit']:.4f} g` | $[\mathrm{{AgNO_3}}]$ = `{dados['conc_agno3']:.4f} mol/L` | Volume anotado = `{st.session_state.volume_adicionado:.2f} mL`
-        - **Gravimetria:** Massa = `{dados['massa_grav']:.4f} g` | Massa de $\mathrm{{AgCl}}$ = `{massa_agcl_txt}`
+        **Resumo das leituras registradas na sua bancada:**
+        - **Titulação:** Massa = `{dados['massa_tit']:.4f} g` | $[\mathrm{{AgNO_3}}]$ = `{dados['conc_agno3']:.4f} mol/L` | Menisco Inicial ($V_i$) = `{vi:.2f} mL` | Menisco Atual ($V_f$) = `{vf:.2f} mL`
+        - **Gravimetria:** {resumo_grav_tela}
         - **Massas Molares:** $\mathrm{{NaCl}} = 58{{,}}44\ \mathrm{{g\,mol^{{-1}}}}$ | $\mathrm{{AgCl}} = 143{{,}}32\ \mathrm{{g\,mol^{{-1}}}}$
         """
     )
@@ -390,10 +468,11 @@ with aba3:
     with st.form("form_relatorio"):
         col_r1, col_r2 = st.columns(2)
         with col_r1:
+            st.subheader("Resultados da Titulação")
             vol_informado = st.number_input(
-                "Volume final da bureta considerado (mL):",
+                "Volume gasto de AgNO₃ calculado (Vf - Vi) (mL):",
                 min_value=0.0,
-                value=float(st.session_state.volume_adicionado),
+                value=0.0,
                 step=0.01,
                 format="%.2f",
             )
@@ -406,6 +485,14 @@ with aba3:
             )
 
         with col_r2:
+            st.subheader("Resultados da Gravimetria")
+            massa_agcl_aluno = st.number_input(
+                "Massa líquida de AgCl calculada por diferença (g):",
+                min_value=0.0,
+                max_value=5.0,
+                step=0.0001,
+                format="%.4f",
+            )
             fg_aluno = st.number_input(
                 "Fator Gravimétrico (NaCl / AgCl) calculado:",
                 min_value=0.0,
@@ -429,8 +516,10 @@ with aba3:
         enviado = st.form_submit_button("📤 Enviar Relatório para o Professor", type="primary")
 
     if enviado:
-        if st.session_state.massa_agcl_obtida is None or vol_informado == 0:
+        if st.session_state.massa_agcl_obtida is None or st.session_state.volume_adicionado == 0:
             st.error("Conclua tanto a Titulação quanto a Gravimetria antes de enviar!")
+        elif vol_informado == 0 or massa_agcl_aluno == 0:
+            st.warning("Calcule e preencha o volume gasto (Vf - Vi) e a massa líquida de AgCl antes de enviar.")
         elif len(discussao.strip()) < 15:
             st.warning("Escreva uma breve discussão comparativa antes de enviar.")
         else:
@@ -442,11 +531,13 @@ with aba3:
                 "Massa_Tit_g": dados["massa_tit"],
                 "Conc_AgNO3": dados["conc_agno3"],
                 "Vol_PF_Teorico_mL": dados["vol_pf_mohr"],
+                "Vol_Real_Escoado_mL": st.session_state.volume_adicionado,
                 "Vol_Informado_mL": vol_informado,
                 "Teor_Tit_Aluno": teor_tit_aluno,
                 "Massa_Grav_g": dados["massa_grav"],
                 "Massa_AgCl_Teorica_g": dados["massa_agcl_teorica"],
                 "Massa_AgCl_Obtida_g": st.session_state.massa_agcl_obtida,
+                "Massa_AgCl_Aluno_g": massa_agcl_aluno,
                 "FG_Aluno": fg_aluno,
                 "Teor_Grav_Aluno": teor_grav_aluno,
                 "Diagnostico_Gravimetria": st.session_state.diagnostico_grav,
@@ -459,7 +550,6 @@ with aba3:
             else:
                 st.error(msg)
 
-            # Gera sempre um recibo CSV para backup imediato do aluno
             df_recibo = pd.DataFrame([registro])
             st.download_button(
                 "⬇️ Baixar Comprovante de Entrega (CSV)",
@@ -467,3 +557,5 @@ with aba3:
                 file_name=f"relatorio_{matricula.strip()}.csv",
                 mime="text/csv",
             )
+
+
