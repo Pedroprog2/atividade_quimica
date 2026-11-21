@@ -76,7 +76,7 @@ def salvar_no_google_forms(registro: dict):
     Envia os dados diretamente para um Google Forms vinculado a uma Planilha no Drive.
     """
     # 1. Substitua pelo link do seu formulário terminando em /formResponse
-    FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfT9FP6VuirUdoRaebDt_4fufS5-g2TDAkh3oZRbNUAd-TUxA/viewform?usp=publish-editor/formResponse"
+    FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfT9FP6VuirUdoRaebDt_4fufS5-g2TDAkh3oZRbNUAd-TUxA/formResponse"
 
     # 2. Substitua os códigos entry.XXXXXXX pelos obtidos no 'Link preenchido automaticamente'
     resumo_numerico = (
