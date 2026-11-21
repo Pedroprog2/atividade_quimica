@@ -82,7 +82,7 @@ def salvar_no_google_forms(registro: dict):
         f"Data: {registro['Data_Hora']} | "
         f"Gabarito_Real: {registro['Teor_Real_Gabarito']}% | "
         f"Tit_Aluno: {registro['Teor_Tit_Aluno']}% "
-        f"(Vol: {registro['Vol_Informado_mL']}/{registro['Vol_PF_Teorico_mL']} mL; "
+        f"(Vol: {registro['Vol_Escoado_mL']}/{registro['Vol_PF_Teorico_mL']} mL; "
         f"m={registro['Massa_Tit_g']}g; C={registro['Conc_AgNO3']}M) | "
         f"Grav_Aluno: {registro['Teor_Grav_Aluno']}% "
         f"(FG: {registro['FG_Aluno']}; AgCl: {registro['Massa_AgCl_Obtida_g']}/{registro['Massa_AgCl_Teorica_g']} g; "
